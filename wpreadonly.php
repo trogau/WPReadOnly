@@ -17,8 +17,7 @@ License: GPLv2 or later
  */
 
 $docroot = $_SERVER['DOCUMENT_ROOT'];
-$wpcontentdir = $docroot."/"."wp-content";
-$actiontext = changePermissions($wpcontentdir);
+$actiontext = changePermissions($docroot);
 
 add_action('admin_menu', 'pldplugin_admin_add_page');
 add_action('admin_bar_menu', 'WPReadOnly_adminbar_link');
