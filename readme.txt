@@ -47,5 +47,13 @@ One of my test machines runs under HHVM; sometimes all exec() calls just fail, r
 
 == Changelog ==
 
+= 0.2 =
+* Changed $_SERVER['DOCUMENT_ROOT'] to use get_home_path() per WP plugin requirements
+* Added check for Linux per WP plugin requirements
+* Added nonce to form per WP plugin requirements
+* Added a bunch of warnings to dissuade non-technical users from using it
+* Added check to ensure required binaries (find, chmod) are present in expected locations
+* Added administrator role requirement
+
 = 0.1 =
 * First release
