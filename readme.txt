@@ -46,6 +46,10 @@ One of my test machines runs under HHVM; sometimes all exec() calls just fail, r
 * Better checks on writeable directories/files (at the moment it only looks at /wp-content).
 
 == Changelog ==
+= 0.3 =
+* Removed dependency on `find` and `chmod` binaries; now uses native PHP calls to loop through files and change mode
+* Changed link name in admin menu to make it a little neater
+* Changed so the main display page now uses get_home_path() as well instead of DOCUMENT_ROOT
 
 = 0.2 =
 * Changed $_SERVER['DOCUMENT_ROOT'] to use get_home_path() per WP plugin requirements
