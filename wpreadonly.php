@@ -1,11 +1,11 @@
 <?php
 /*
 Plugin Name: WPReadOnly
-Plugin URI: http://trog.qgl.org/WPReadOnly
+Plugin URI: https://trog.qgl.org/WPReadOnly
 Description: Plugin to toggle write permissions in a standard WordPress install. 
 Author: trogau
-Version: 0.2
-Author URI: http://trog.qgl.org
+Version: 0.3
+Author URI: https://trog.qgl.org
 License: GPLv2 or later
 */
 
@@ -16,13 +16,16 @@ License: GPLv2 or later
  * docs here: https://codex.wordpress.org/Creating_Options_Pages
  */
 
+$actiontext = "";
+
 function wpreadonly_init()
 {
+	global $actiontext;
 	require_once( ABSPATH . '/wp-admin/includes/file.php' );
 
 	if(current_user_can('administrator'))
 	{
-		$docroot = get_home_path();
+		$docroot = removeTrailingSlash(get_home_path());
 		$actiontext = changePermissions($docroot);
 	}
 	else
@@ -34,7 +37,7 @@ function wpreadonly_init()
 
 function pldplugin_admin_add_page()
 {
-	add_options_page('WPReadOnly Options', 'WPReadOnly Options', 'manage_options', 'WPReadOnly', 'WPReadOnly_options_page');
+	add_options_page('WPReadOnly', 'WPReadOnly', 'manage_options', 'WPReadOnly', 'WPReadOnly_options_page');
 }
 
 function changePermissions($docroot)
@@ -51,37 +54,26 @@ function changePermissions($docroot)
 
 		if ($_POST['lockmode'] == "lock")
 		{
-			exec("/usr/bin/find $docroot -type d -exec /bin/chmod 555 \{\} \\;", $res, $ret);
-			exec("/usr/bin/find $docroot -type f -exec /bin/chmod 444 \{\} \\;", $res, $ret2);
-
-			// exec() may fail and return NULL (at least, under HHVM if it runs out of memory
-			if ($ret === NULL || $ret2 === NULL)
-				die("ERROR: couldn't exec()");
-			else
-				return "LOCKED ($docroot)";
-
+			listFiles($docroot, "readonly");
+			return "LOCKED ($docroot)";
 		}
 		else if ($_POST['lockmode'] == "unlock")
 		{
-			exec("/usr/bin/find $docroot -type d -exec /bin/chmod 755 \{\} \\;", $res, $ret);
-			exec("/usr/bin/find $docroot -type f -exec /bin/chmod 644 \{\} \\;", $res, $ret2);
-
-			// exec() may fail and return NULL (at least, under HHVM if it runs out of memory
-			if ($ret === NULL || $ret2 === NULL)
-				die("ERROR: couldn't exec()");
-			else
-				return "UNLOCKED ($docroot)";
+			listFiles($docroot, "writeable");
+			return "UNLOCKED ($docroot)";
 		}
 	}
 }
 
 function WPReadOnly_options_page()
 {
-	$docroot = $_SERVER['DOCUMENT_ROOT'];
+	//$docroot = $_SERVER['DOCUMENT_ROOT'];
+	$docroot = removeTrailingSlash(get_home_path());
+
 	$wpcontentdir = $docroot."/"."wp-content";
 
 	?>
-	<h1>WPReadOnly</h1>
+	<h1>WPReadOnly v0.3</h1>
 	<p></p>
 
 	<?php
@@ -160,9 +152,15 @@ function WPReadOnly_adminbar_link($wp_admin_bar)
 	$wp_admin_bar->add_node( $args );
 }
 
+/**
+ * Check to see if required binaries are installed locally & available to PHP. (Deprecated as of v0.3 now that `find` and `chmod` are 
+ * replaced with native PHP functions). 
+ * 
+ * @return bool True if all clear, false on a missing dependency. 
+ */
 function checkRequirements()
 {
-	$bins = array("/usr/bin/find", "/bin/chmod");
+	$bins = array();
 
 	foreach ($bins as $bin)
 	{
@@ -195,6 +193,81 @@ add_filter("plugin_action_links_$plugin", 'WPReadOnly_settings_link' );
  */
 
 
+/**
+ * Recursively loop through a directory and update the permissions to readable or writeable based on WP standards.
+ *
+ * @param string $dir The starting directory. 
+ * @param string $updatePerms The mode to change to (options are 'readonly', 'writeable').
+ *
+ * @return bool Returns true on success or false on failure (FIXME: failure modes not implemented).
+ */
+function listFiles(string $dir, string $updatePerms = "readonly")
+{
+	if ($dh = opendir($dir))
+	{
+		// FIXME: probably a better way to do this
+		if ($updatePerms === "readonly")
+		{
+			if (!chmod($dir, 0555))
+				die("ERROR: Couldn't set readonly permissions on directory.");
+		}
+		else if ($updatePerms === "writeable")
+		{
+			if (!chmod($dir, 0755))
+				die("ERROR: Couldn't set write permissions on directory.");
+		}		
+
+		while (false !== ($file = readdir($dh)))
+		{
+			if ($file === "." || $file === "..")
+				continue;
+
+			$filepath = $dir."/".$file;
+
+			if (is_dir($filepath))
+			{
+				if ($updatePerms === "readonly")
+				{
+					if (chmod($filepath, 0555))
+					{
+						//print " readonly set";
+					}
+				}
+				else if ($updatePerms === "writeable")
+				{
+					if (chmod($filepath, 0755))
+					{
+						//print " writeable set";
+					}
+				}
+				listFiles($filepath, $updatePerms);
+			}
+			else
+			{
+				if ($updatePerms === "readonly")
+				{
+					if (chmod($filepath, 0444))
+					{
+						//print " readonly set";
+					}
+				}
+				else if ($updatePerms === "writeable")
+				{
+					if (chmod($filepath, 0644))
+					{
+						//print " writeable set";
+					}
+				}
+			}
+			//print "<br />";
+		}
+	}
+	else
+		die("ERROR: Couldn't open directory $dir");
+
+	return true;
+}
+
 
 // Bail if running under Windows
 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN')
@@ -208,4 +281,17 @@ else
 	add_action('admin_menu', 'pldplugin_admin_add_page');
 	add_action('admin_bar_menu', 'WPReadOnly_adminbar_link');
 	add_action('admin_init', 'wpreadonly_init');
+}
+
+/**
+ * Remove trailing slash from a directory filepath. 
+ * 
+ * @param string $str String to remove the trailing slash from. 
+ *
+ * @retrun string Adjusted string without the trailing slash. 
+ */
+function removeTrailingSlash($str)
+{
+	$newstr = preg_replace("/\/$/", "", $str);
+	return $newstr;
 }
